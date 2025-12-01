@@ -53,10 +53,67 @@ for year in range(2015, 2020):
 
 combined = pd.concat(dfs, ignore_index=True)
 
-combined = combined.drop(columns=["Family", "Trust (Government Corruption)", 
-                                  "Lower Confidence Interval", "Upper Confidence Interval", "Whisker.high", "Whisker.low","Happiness Rank", "Standard Error", "Dystopia Residual", "Region"], errors="ignore")
+combined = combined.drop(
+    columns=[
+        "Family",
+        "Trust (Government Corruption)",
+        "Lower Confidence Interval",
+        "Upper Confidence Interval",
+        "Whisker.high",
+        "Whisker.low",
+        "Happiness Rank",
+        "Standard Error",
+        "Dystopia Residual",
+    ],
+    errors="ignore",
+)
+
+region_col = "Region"
+
+region_map = (
+    combined.dropna(subset=[region_col])
+            .groupby("Country")[region_col]
+            .agg(lambda x: x.mode().iat[0])
+)
+
+# Fill missing region values
+missing_before = combined[region_col].isna().sum()
+combined[region_col] = combined[region_col].fillna(combined["Country"].map(region_map))
+missing_after = combined[region_col].isna().sum()
+
+print(f"Missing '{region_col}' values after filling:  {missing_after}")
+
+# Find countries where Region is still missing for all their observations
+still_missing = combined[combined[region_col].isna()]
+countries_needing_manual_region = sorted(still_missing["Country"].unique())
+
+print("\nCountries with no region info in any year:")
+for country in countries_needing_manual_region:
+    print(country)
+
+distinct_regions = sorted(combined[region_col].dropna().unique())
+
+print("\ndistinct regions in the data:")
+for r in distinct_regions:
+    print(r)
+
+manual_region_map = {
+    "Gambia": "Sub-Saharan Africa",
+    "Hong Kong S.A.R., China": "Eastern Asia",
+    "North Macedonia": "Central and Eastern Europe",
+    "Northern Cyprus": "Middle East and Northern Africa",
+    "Taiwan Province of China": "Eastern Asia",
+    "Trinidad & Tobago": "Latin America and Caribbean",
+}
+
+mask = combined["Country"].isin(manual_region_map.keys())
+combined.loc[mask, region_col] = combined.loc[mask, "Country"].map(manual_region_map)
+
+print("Missing region values after manual assignments:",
+      combined[region_col].isna().sum())
+
 
 out_path = Path("data") / "2015_2019_combined.csv"
 combined.to_csv(out_path, index=False)
 
-print(f"Saved combined file as {out_path}")
+print(f"\nSaved combined file as {out_path}")

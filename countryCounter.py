@@ -32,4 +32,3 @@ print(f"Rows with at least 1 missing value: {num_missing} out of {total_rows}")
 rows_with_missing = df[missing_mask]
 print("\nRows with missing values:")
 print(rows_with_missing)
-
