@@ -19,16 +19,11 @@ for country, count in not_five:
     print(f"{country}: {count}")
 
 print("total # of countries that don't occur 5 times: ", len(not_five))
-
-# identify rows with any missing values
-missing_mask = df.isna().any(axis=1)   # same as df.isnull().any(axis=1)
-
-# number of such rows
+missing_mask = df.isna().any(axis=1) 
 num_missing = missing_mask.sum()
 total_rows = len(df)
 
 print(f"Rows with at least 1 missing value: {num_missing} out of {total_rows}")
-
 rows_with_missing = df[missing_mask]
 print("\nRows with missing values:")
 print(rows_with_missing)
