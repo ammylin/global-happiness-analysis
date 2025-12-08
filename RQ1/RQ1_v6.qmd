@@ -1,0 +1,289 @@
+---
+title: "Global Happiness Analysis"
+subtitle: "Arvind Kandala, Ammy Lin, Lingyue Hao, Shelly Cao"
+execute:
+  echo: false
+  message: false
+  warning: false
+editor: visual
+format: pdf
+---
+
+## Load data
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(broom)
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+library(dplyr)
+
+
+happiness <- read.csv("https://github.com/lingyuehao/ids702_Team3/raw/refs/heads/main/data/2015_2019_combined_updated.csv")
+
+happiness <- happiness %>%
+  rename(
+    country          = Country,
+    region           = Region,
+    score            = Happiness.Score,
+    gdp_index        = Economy..GDP.per.Capita.,
+    family_index     = Family,
+    lifeexp_index    = Health..Life.Expectancy.,
+    freedom_index    = Freedom,
+    trust_index      = Trust..Government.Corruption.,
+    generosity_index = Generosity,
+    year             = Year
+  )
+
+glimpse(happiness)
+head(happiness)
+
+
+```
+
+### **Research Question 1: Life Expectancy, GDP, and Happiness**
+
+Is there a significant association between life expectancy and national happiness, after adjusting for GDP per capita?
+
+### **Model Specification:**
+
+We estimate a multiple linear regression model to study how life expectancy and economic development jointly relate to national happiness. The outcome variable is the country-level happiness score reported in the World Happiness Report, which is constructed relative to a “Dystopia” baseline that represents the lowest observed levels of each well-being component. All component indices, including life expectancy, GDP per capita, family support, freedom, trust, and generosity, take values between 0 and 1 and quantify how far each country lies above this Dystopia reference point. Because the outcome is continuous and the predictors are measured on interval-like scales, a linear regression framework is appropriate. The model relies on the standard assumptions that (1) the conditional relationship between predictors and the outcome is linear, (2) residuals have constant variance across fitted values, (3) residuals are independent across observational units, and (4) residuals are approximately normally distributed. 
+
+The primary objective is to examine whether the association between life expectancy and happiness differs across levels of economic development. To address this, the model includes life expectancy and GDP per capita indices as continuous predictors along with their interaction. In this specification, the individual coefficients on life expectancy and GDP per capita cannot be interpreted as marginal effects; instead, they contribute to a combined effect that depends jointly on both indicators. The interaction term captures whether improvements in life expectancy translate into larger or smaller increases in happiness depending on a country’s economic conditions.
+
+All remaining available well-being components—family support, freedom, trust, and generosity—are included as covariates to reduce confounding. These factors represent social, institutional, and relational environments that plausibly influence both life expectancy and subjective well-being, and adjusting for them allows the model to better isolate the association of interest. Because the dataset spans multiple time points, the model also includes the survey year as a continuous predictor, along with interactions between year and both life expectancy and GDP per capita.
+
+Since countries contribute repeated observations to the dataset, standard errors are computed using country-level clusters–robust variance estimators. This approach addresses within-country dependence that would otherwise bias classical standard errors and ensures valid inference even in the presence of serial correlation or heteroskedasticity. 
+
+
+
+
+
+```{r}
+library(dplyr)
+library(lmtest)
+library(sandwich)
+library(knitr)
+library(kableExtra)
+
+rq1_model <- lm(
+  score ~ lifeexp_index * gdp_index +
+    lifeexp_index * year +
+    gdp_index * year +
+    family_index +
+    freedom_index +
+    trust_index +
+    generosity_index +
+    year,
+  data = happiness
+)
+
+model_summary <- summary(rq1_model)
+r2_value <- model_summary$r.squared
+adj_r2   <- model_summary$adj.r.squared
+
+cluster_vcov <- sandwich::vcovCL(rq1_model, cluster = ~ country)
+coefs_robust <- lmtest::coeftest(rq1_model, vcov = cluster_vcov)
+
+crit_val <- qt(0.975, df = rq1_model$df.residual)
+
+rq1_table <- data.frame(
+  term      = rownames(coefs_robust),
+  estimate  = coefs_robust[, "Estimate"],
+  std.error = coefs_robust[, "Std. Error"],
+  statistic = coefs_robust[, "t value"],
+  p.value   = coefs_robust[, "Pr(>|t|)"],
+  stringsAsFactors = FALSE
+) %>%
+  mutate(
+    conf.low  = estimate - crit_val * std.error,
+    conf.high = estimate + crit_val * std.error
+  ) %>%
+  mutate(
+    term = dplyr::recode(
+      term,
+      "(Intercept)"              = "Intercept",
+      "lifeexp_index"           = "Life expectancy index",
+      "gdp_index"               = "GDP per capita index",
+      "family_index"            = "Family index",
+      "freedom_index"           = "Freedom index",
+      "trust_index"             = "Trust index",
+      "generosity_index"        = "Generosity index",
+      "year"                    = "Year",
+      "lifeexp_index:gdp_index" = "Life expectancy × GDP per capita",
+      "lifeexp_index:year"      = "Life expectancy × Year",
+      "gdp_index:year"          = "GDP per capita × Year"
+    ),
+    p.value   = ifelse(p.value < 0.001, "<0.001",
+                       sprintf("%.3f", round(p.value, 3))),
+    estimate  = sprintf("%.3f", round(estimate, 3)),
+    std.error = sprintf("%.3f", round(std.error, 3)),
+    statistic = sprintf("%.3f", round(statistic, 3)),
+    conf.low  = sprintf("%.3f", round(conf.low, 3)),
+    conf.high = sprintf("%.3f", round(conf.high, 3))
+  )
+
+rq1_table <- dplyr::bind_rows(
+  rq1_table,
+  tibble::tibble(
+    term      = c("R-squared", "Adjusted R-squared"),
+    estimate  = c(sprintf("%.3f", round(r2_value, 3)),
+                  sprintf("%.3f", round(adj_r2, 3))),
+    std.error = "", statistic = "", p.value = "",
+    conf.low  = "", conf.high = ""
+  )
+)
+
+colnames(rq1_table) <- c(
+  "Variable", "Estimate", "Std Error", "t-value", "p-value",
+  "2.5% CI", "97.5% CI"
+)
+
+rownames(rq1_table) <- NULL
+
+kable(
+  rq1_table,
+  caption = "Linear regression model for national happiness (cluster–robust SEs by country)",
+  booktabs = TRUE,
+  longtable = FALSE,
+  linesep  = "",
+  align    = c("l", "c", "c", "c", "c", "c", "c")
+) %>%
+  kableExtra::kable_styling(full_width = FALSE, font_size = 10)
+
+ 
+```
+
+The main effect coefficients in Table 1, such as −341.906 for life expectancy and 324.225 for GDP per capita, appear numerically large because, in a model that includes interaction terms, each main effect represents the estimated association when all interacting variables are equal to 0. In this dataset, such zero values do not occur. The life expectancy and GDP indices are constructed relative to a Dystopia reference point and never take the value 0, and the year variable ranges from 2015 to 2019 rather than approaching 0. As a result, the main effect coefficients reflect values at hypothetical predictor combinations outside the empirical data range. They are therefore not meaningful in isolation, and interpretation must instead focus on the interaction terms that determine the estimated relationships within the actual values observed in the dataset.
+
+The interaction terms provide the relevant information for understanding how the association between life expectancy and happiness depends on economic level and time period. The interaction between life expectancy and GDP per capita has an estimated coefficient of 1.195 with a p value of 0.014 and a confidence interval from 0.242 to 2.148, indicating that the estimated association between life expectancy and happiness becomes stronger at higher GDP levels. The interaction between life expectancy and year shows a similar pattern. Its estimated coefficient is 0.170 with a p value of 0.043 and a confidence interval from 0.005 to 0.334. Within the observed period from 2015 to 2019, the model therefore estimates an increasing association between life expectancy and happiness across successive years. These two interactions confirm that the effect of life expectancy cannot be summarized by a single slope and varies across both GDP per capita and year.
+
+Additional covariates also contribute to explaining variation in happiness. The family index and freedom index have statistically significant positive coefficients of 0.890 and 1.480 respectively, indicating that they account for meaningful differences in happiness scores after conditioning on all other predictors. Trust and generosity are not statistically significant in this specification, as their confidence intervals include 0. Overall model fit is strong, with an R squared of 0.781 and an adjusted R squared of 0.778, indicating that the model explains a substantial portion of the variation in national happiness. 
+
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+gdp_q <- quantile(happiness$gdp_index, c(0.10, 0.50, 0.90), na.rm = TRUE)
+
+gdp_levels <- c(
+  "Low GDP"     = gdp_q[1],  
+  "Median GDP"  = gdp_q[2],   
+  "High GDP"    = gdp_q[3]   
+)
+
+life_exp_range <- seq(
+  min(happiness$lifeexp_index, na.rm = TRUE),
+  max(happiness$lifeexp_index, na.rm = TRUE),
+  length.out = 120
+)
+
+plot_data <- lapply(names(gdp_levels), function(level_name) {
+  data.frame(
+    lifeexp_index    = life_exp_range,
+    gdp_index        = gdp_levels[[level_name]],
+    GDP_Level        = level_name,
+    family_index     = mean(happiness$family_index, na.rm = TRUE),
+    freedom_index    = mean(happiness$freedom_index, na.rm = TRUE),
+    trust_index      = mean(happiness$trust_index, na.rm = TRUE),
+    generosity_index = mean(happiness$generosity_index, na.rm = TRUE),
+    year             = mean(happiness$year, na.rm = TRUE)
+  )
+}) |> bind_rows()
+
+preds <- predict(rq1_model, newdata = plot_data, interval = "confidence")
+plot_data <- cbind(plot_data, preds)
+
+ggplot() +
+  geom_point(
+    data = happiness,
+    aes(x = lifeexp_index, y = score, colour = gdp_index),
+    alpha = 0.5, size = 1.4
+  ) +
+  geom_line(
+    data = plot_data,
+    aes(x = lifeexp_index, y = fit, linetype = GDP_Level),
+    linewidth = 1.2,
+    colour = "black"
+  ) +
+  geom_ribbon(
+    data = plot_data,
+    aes(x = lifeexp_index, ymin = lwr, ymax = upr, group = GDP_Level),
+    fill = "grey70", alpha = 0.15
+  ) +
+  scale_colour_viridis_c() +
+  theme_minimal() +
+  labs(
+    title    = "Observed Happiness and Modelled Interaction between Life Expectancy and GDP",
+    subtitle = "Fitted lines represent predictions at the 10th, 50th, and 90th percentiles of the GDP index",
+    x        = "Life expectancy index",
+    y        = "Happiness score (observed)",
+    colour   = "GDP index (observed)",
+    linetype = "GDP index level"
+  )
+
+```
+
+Figure above presents the observed relationship between the life expectancy index and national happiness, together with fitted regression lines that illustrate the estimated interaction between life expectancy and GDP. The horizontal axis displays the life expectancy component from the World Happiness Report. This variable is not measured in years; rather, it is a 0–approximately 1.03 scaled index representing how much a country’s life expectancy exceeds the report’s Dystopia benchmark—a hypothetical minimum reference level used across all countries.
+
+The vertical axis reports the observed happiness score, which ranges from 0 to 10. Each point corresponds to a country–year observation, and its colour shows the observed value of the GDP component index. Similar to life expectancy, the GDP index is not GDP per capita in dollars. Instead, it is a 0–approximately 1.7 scaled measure indicating how far a country’s GDP per capita lies above the shared Dystopia baseline. The World Happiness methodology transforms GDP per capita into this index to make all component scores comparable on a common scale.
+
+Superimposed on the scatterplot are three fitted regression lines representing predicted happiness at the 10th, 50th, and 90th percentiles of the GDP index, while all other covariates (family, freedom, trust, generosity, and year) are held at their mean levels. These lines summarize the interaction estimated in the regression model. The fitted line at the 90th percentile of the GDP index has the steepest positive slope, indicating that increases in the life expectancy index are associated with larger increases in predicted happiness when GDP is relatively high. In contrast, the fitted line at the 10th percentile is noticeably flatter, showing that improvements in the life expectancy index correspond to smaller predicted increases in happiness when GDP levels are low.
+
+### **Model Assessment:**
+
+```{r, fig.width=7, fig.height=5, out.width="70%"}
+par(mfrow = c(2,2),
+    mar = c(4,4,2,1),
+    cex = 0.9,
+    cex.axis = 0.9,
+    cex.lab = 0.9,
+    cex.main = 1.1)
+
+plot(rq1_model)
+```
+
+
+The residuals-versus-fitted plot displays residuals scattered on both sides of zero without a strong curved trend, indicating no obvious departure from linearity in the fitted relationship. Although the spread of points varies somewhat across the range of fitted values, the plot does not show a clear funnel shape, and no single region dominates the pattern. This visual pattern suggests that the linearity assumption is reasonably supported by the observed residuals.
+
+The Q–Q plot shows that standardized residuals follow the theoretical quantile line closely through the central portion of the distribution, while deviations are visible in both tails. The extreme points fall away from the reference line more noticeably than the bulk of the observations, indicating that the residual distribution departs from perfect normality primarily at the extremes. The majority of points remain near the line, and the departures are concentrated in the upper and lower tails as illustrated in the figure.
+
+The scale–location plot presents standardized residuals whose average level remains relatively stable across fitted values, with a slight increase in variability toward the higher end of the fitted range. While not perfectly uniform, the pattern does not display a strong upward or downward trend, and the observed heterogeneity in spread appears modest based on the visual distribution. This suggests mild heteroskedasticity, though the figure does not show a severe or systematic change in variance.
+
+The residuals-versus-leverage plot indicates that most observations fall within a low leverage range, forming a dense cluster near the vertical axis. A few points appear at higher leverage values, but none approach the Cook’s Distance reference curves drawn in the plot. All points lie well below these curves, and no observation stands out as exerting undue influence based on its position relative to the reference boundaries shown. Thus, the figure does not provide visual evidence of highly influential observations.
+
+We evaluated multicollinearity using Variance Inflation Factors (VIFs). In the initial model, the interaction terms produced extremely large VIF values. This occurs because an interaction constructed from two uncentered predictors is inherently highly correlated with those same predictors: the product term increases in tandem with each component, creating structural collinearity even when the underlying data themselves do not exhibit problematic relationships.
+
+To address this, the predictors involved in the interaction were mean-centered before refitting the model. Centering removes the linear dependence between each predictor and the product term by redefining the interaction around the average levels of the predictors rather than around zero, which is not meaningful in this context. After centering, the VIFs for the two main predictors were approximately 2.68 and 2.67, and the VIF for the interaction term fell to approximately 1.15.
+
+
+```{r}
+library(car)
+
+vif_initial <- vif(rq1_model)
+vif_initial
+ 
+happiness <- happiness %>%
+  mutate(
+    lifeexp_centered = lifeexp_index - mean(lifeexp_index, na.rm = TRUE),
+    gdp_centered = gdp_index - mean(gdp_index, na.rm = TRUE)
+  )
+
+rq1_model_centered <- lm(score ~ lifeexp_centered * gdp_centered, data = happiness)
+
+vif_centered <- vif(rq1_model_centered)
+
+vif_table <- data.frame(
+  Predictor = names(vif_centered),
+  VIF = vif_centered
+)
+
+kable(vif_table, caption = "Variance Inflation Factor (VIF) for Centered Model") %>%
+  kable_styling(full_width = F)
+```
