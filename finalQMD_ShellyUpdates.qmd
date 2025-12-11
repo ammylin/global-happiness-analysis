@@ -74,7 +74,7 @@ For regional happiness, the results indicate that the relationship between regio
 
 ## **Interpretation and Implications**
 
-```{r, fig.cap = "Observed Happiness and Modelled Interaction between Life Expectancy and GDP",fig.width = 4, fig.height = 2}
+```{r, fig.cap = "Observed Happiness and Modelled Interaction between Life Expectancy and GDP",fig.width = 5, fig.height = 3}
 rq1_model <- lm(
   score ~ lifeexp_index * gdp_index +
     lifeexp_index * year +
@@ -646,8 +646,10 @@ The diagnostics and predicted-probability curves support the appropriateness of 
 
 Helliwell, J. F., Layard, R., Sachs, J. D., De Neve, J.-E., Aknin, L. B., & Wang, S. (Eds.). (2025). World Happiness Report 2025. Wellbeing Research Centre, University of Oxford.
 
-Roser, M., & Ortiz-Ospina, E. (2024). Happiness and life satisfaction. Our World in Data.[https://ourworldindata.org/happiness-and-life-satisfaction](https://ourworldindata.org/happiness-and-life-satisfaction?utm_source=chatgpt.com).
+Roser, M., & Ortiz-Ospina, E. (2024). Happiness and life satisfaction. Our World in Data.
+
+[https://ourworldindata.org/happiness-and-life-satisfaction](https://ourworldindata.org/happiness-and-life-satisfaction?utm_source=chatgpt.com).
 
 World Happiness Report. (2024). World Happiness Report 2024. Sustainable Development Solutions Network.<https://worldhappiness.report/>.
 
-World Happiness Report. (2019). Kaggle. <https://www.kaggle.com/datasets/unsdsn/world-happiness>
+World Happiness Report.(2019).Kaggle.<https://www.kaggle.com/datasets/unsdsn/world-happiness>
